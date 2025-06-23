@@ -2,12 +2,8 @@ streamlit
 pandas
 scikit-learn
 matplotlib
-pillow
-fpdf
 mplsoccer
 seaborn
 numpy
-io
-tempfile
 pyarrow
 pip
