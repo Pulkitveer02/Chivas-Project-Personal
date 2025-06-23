@@ -9,23 +9,6 @@ from mplsoccer import VerticalPitch, Pitch
 import seaborn as sns
 
 
-# #defining filtered data
-# def filter_player_data(df_player, team, week):
-#     df_player = df_player[df_player["Team ID"] == team]
-
-#     if week:
-#         df_player = df_player[df_player["Week"] == week]
-
-#     return df_player
-
-
-# def filter_team_data(df_team, team, week):
-#     df_team = df_team[df_team["Team ID"] == team]
-
-#     if week:
-#         df_team = df_team[df_team["Week"] == week]
-        
-#     return df_team
 
 
 import pandas as pd
@@ -294,51 +277,7 @@ formation_usage_streamlit(df_team_formations, team_selected)
 
 
 
-# def map_formation_coords(formation_type, players_df):
 
-#     players_df = players_df.loc[(~players_df["Formation Place"].isna())]
-
-#     plot_players = []
-
-#     for index, row in players_df.iterrows():
-#         player = {'Number' : row['Shirt Number'], 'Formation Place' : row['Formation Place']}
-#         plot_players.append(player)
-
-#     positions = formation_templates.get(formation_type)
-#     if not positions:
-#         raise ValueError(f"Formation {formation_type} not supported.")
-
-#     mapped = {}
-#     for player in plot_players:
-#         place = int(player['Formation Place']) - 1  # 0-based index
-#         if 0 <= place < len(positions):
-#             mapped[player['Number']] = positions[place]
-#     return mapped
-
-
-
-# def visualize_formation(mapped_positions, title="Team Formation"):
-#     pitch = Pitch(pitch_type='opta', line_color='black')
-#     fig, ax = pitch.draw(figsize=(10, 7))
-
-#     for name, (x, y) in mapped_positions.items():
-#         pitch.scatter(x, y, ax=ax, s=600, color='red', edgecolors='black', zorder=2)
-#         pitch.annotate(name, (x, y), ax=ax, va='center', ha='center', fontsize=9, color='white', weight='bold')
-
-#     ax.set_title(title, fontsize=14)
-    
-#     st.pyplot(fig)
-
-
-### MATCH MOMENTUM
-
-
-# def match_momentum_df(df, match_id):
-#     df = df[df["Match ID"] == match_id]
-
-#     return df
-
-# import matplotlib.pyplot as plt
 
 
 # def plot_momentum(df):
