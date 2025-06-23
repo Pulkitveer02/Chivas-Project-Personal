@@ -7,3 +7,4 @@ seaborn
 numpy
 pyarrow
 pip
+io
