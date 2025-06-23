@@ -7,14 +7,10 @@ import io
 import tempfile
 from mplsoccer import VerticalPitch, Pitch
 import seaborn as sns
+import pyarrow
 
 
 
-
-import pandas as pd
-from collections import Counter
-from mplsoccer import Pitch
-import matplotlib.pyplot as plt
 
 df = pd.read_parquet(r"datasets\player_stats.parquet")
 
