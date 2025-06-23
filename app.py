@@ -2,9 +2,6 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-from fpdf import FPDF
-import io
-import tempfile
 from mplsoccer import VerticalPitch, Pitch
 import seaborn as sns
 import pyarrow
