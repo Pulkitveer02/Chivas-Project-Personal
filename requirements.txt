@@ -9,4 +9,4 @@ seaborn
 numpy
 io
 tempfile
-pandas pyarrow
+pyarrow
