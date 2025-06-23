@@ -7,12 +7,12 @@ import seaborn as sns
 import pyarrow
 import io
 
-df = pd.read_parquet("datasets\player_stats.parquet")
+df = pd.read_parquet("datasets/player_stats.parquet")
 
 df_formations = df.loc[(df['type'] == "formationPlace") & (df['value'] > 0)]
 df_formations["pos"]  = [pos[0] for pos in df_formations["pos"]]
 
-df_team_formations = pd.read_parquet("datasets\formations.parquet")
+df_team_formations = pd.read_parquet("datasets/formations.parquet")
 
 
 # STEP 1: Get Most Common Formation Per Team
