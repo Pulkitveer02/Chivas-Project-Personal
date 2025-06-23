@@ -5,7 +5,7 @@ import numpy as np
 from mplsoccer import VerticalPitch, Pitch
 import seaborn as sns
 import pyarrow
-
+import io
 
 df = pd.read_parquet("datasets\player_stats.parquet")
 
