@@ -10,23 +10,12 @@ import seaborn as sns
 import pyarrow
 
 
-
-
-
-import pandas as pd
-from collections import Counter
-from mplsoccer import Pitch
-import matplotlib.pyplot as plt
-
 df = pd.read_parquet(r"datasets\player_stats.parquet")
 
 df_formations = df.loc[(df['type'] == "formationPlace") & (df['value'] > 0)]
 df_formations["pos"]  = [pos[0] for pos in df_formations["pos"]]
 
 df_team_formations = pd.read_parquet(r"datasets\formations (2).parquet")
-
-
-
 
 
 # STEP 1: Get Most Common Formation Per Team
