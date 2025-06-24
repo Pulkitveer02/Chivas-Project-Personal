@@ -236,7 +236,6 @@ formation_coordinates_opta = {
     ]
 }
 
-
 ### TEAM COLOURS
 team_colors = {
     "Deportivo Toluca FC": "#E00000",  # Red
@@ -258,6 +257,67 @@ team_colors = {
     "Mazatlán FC": "#5E378F",          # Purple
     "Club Puebla": "#00529C"           # Blue
 }
+
+
+
+### DEFENSE
+# POSSESSIONS WON VISUALIZATION
+
+def possession_wins(df, team):
+
+
+    possession_win_metrics = ["possWonDef3rd", "possWonMid3rd", "possWonAtt3rd"]
+
+    pos_win = df.loc[(df["type"].isin(possession_win_metrics)) & (df["equipo"] == team)]
+    pos_win = pos_win.groupby(["equipo", "type"])["value"].sum().reset_index()
+
+    att = pos_win.loc[pos_win["type"] == 'possWonAtt3rd']["value"].iloc[0]
+    mid = pos_win.loc[pos_win["type"] == 'possWonMid3rd']["value"].iloc[0]
+    defen = pos_win.loc[pos_win["type"] == 'possWonDef3rd']["value"].iloc[0]
+
+    st.write(f"Possessions won by {team}\n\n Att: {att}, Mid: {mid}, Def: {defen}")
+    
+    values = np.array([att, mid, defen])
+    norm_vals = (values - values.min()) / (values.max() - values.min())
+
+    # Set a colormap
+    cmap = plt.cm.Reds
+
+    # Thirds rectangles
+    third_heights = [33.3, 33.3, 33.3]  # 1/3rd each for half pitch
+    y_starts = [0, 33.3, 66.6]
+
+
+    # Visualize on a vertical pitch
+    pitch = Pitch(
+    pitch_type='opta',  
+    pad_left=0,     # Reduce padding around the pitch
+    pad_right=0,
+    pad_top=0,
+    pad_bottom=0
+)
+    fig, ax = pitch.draw(figsize=(3, 4))  # << Smaller figure size!
+
+    # Draw each third as a colored rectangle
+    for i, (y_start, val) in enumerate(zip(y_starts, norm_vals)):
+        color = cmap(val)  # color intensity
+        rect = Rectangle(
+            (y_start, 0),
+            width=33.3,
+            height=100,
+            color=color,
+            alpha=0.7,
+            zorder=0,
+        )
+        ax.add_patch(rect)
+
+    # Add labels
+    pitch.annotate(f"{defen}\nDef Third", xy=(25, 50), ha='center', va='center', fontsize=5, ax=ax)
+    pitch.annotate(f"{mid}\nMid Third", xy=(50, 50), ha='center', va='center', fontsize=5, ax=ax)
+    pitch.annotate(f"{att}\nAtt Third", xy=(75, 50), ha='center', va='center', fontsize=5, ax=ax)
+
+
+    st.pyplot(fig)
 
 
 # Assuming df_formations and df_team_formations are preloaded
@@ -288,6 +348,9 @@ if team_selected:
 
 formation_usage_streamlit(df_team_formations, team_selected)
 
+st.title("Defense")
+
+possession_wins(df, team_selected)
 
 
 
