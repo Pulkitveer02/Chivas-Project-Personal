@@ -6,6 +6,8 @@ from mplsoccer import VerticalPitch, Pitch
 import seaborn as sns
 import pyarrow
 import io
+from matplotlib.patches import Rectangle
+
 
 df = pd.read_parquet("datasets/player_stats.parquet")
 
