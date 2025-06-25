@@ -329,7 +329,19 @@ def possession_wins(df, team):
 
 
 st.title("Team Formation Visualizer")
-team_selected = st.selectbox("Select a Team", sorted(df_team_formations['team'].unique()))
+team_selected = st.selectbox("Selcciona Equipo a Analizar", sorted(df_team_formations['team'].unique()))
+
+#Filtros
+#Rival
+rival_selected = st.selectbox("Selcciona Rival", sorted(df_team_formations['team'].unique()))
+#Condicion
+condicion_selected = st.selectbox("Condición del equipo", ["Home", "Away"])
+# Visual Cantidad de partidos
+# Obtener fixtures únicos de ese equipo
+unique_fixtures = df_team_formations[df_team_formations['team'] == team_selected]['fixture_id'].drop_duplicates()
+
+# Slider para seleccionar número de últimos partidos (limitado al número de fixtures únicos disponibles)
+num_matches = st.slider("Seleccione cantidad de partidos", min_value=1, max_value=len(unique_fixtures), value=5)
 
 if team_selected:
     formation = get_most_common_formation(df_team_formations, team_selected)
