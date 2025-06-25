@@ -328,7 +328,7 @@ def possession_wins(df, team):
 
 
 
-st.title("Team Formation Visualizer")
+st.title("Chivas - Team Formation Visualizer")
 team_selected = st.selectbox("Selcciona Equipo a Analizar", sorted(df_team_formations['team'].unique()))
 
 #Filtros
