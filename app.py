@@ -10,6 +10,8 @@ from matplotlib.gridspec import GridSpec
 import numpy as np
 from matplotlib import cm, colors as mcolors
 
+@st.cache_data
+
 if os.path.exists("datasets/player_stats.parquet"):
     df_player = pd.read_parquet("datasets/player_stats.parquet")
 else:
