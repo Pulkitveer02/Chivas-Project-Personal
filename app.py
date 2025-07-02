@@ -10,15 +10,26 @@ from matplotlib.gridspec import GridSpec
 import numpy as np
 from matplotlib import cm, colors as mcolors
 
+if os.path.exists("datasets/player_stats.parquet"):
+    df_player = pd.read_parquet("datasets/player_stats.parquet")
+else:
+    st.error("❌ player_stats.parquet not found!")
 
-df_player = pd.read_parquet("datasets/player_stats.parquet")
+
+if os.path.exists("datasets/match_events.parquet"):
+    df_events = pd.read_parquet("datasets/match_events.parquet")
+else:
+    st.error("❌ event_stats.parquet not found!")
+
+
+if os.path.exists("datasets/formations.parquet"):
+    df_team_formations = pd.read_parquet("datasets/formations.parquet")
+else:
+    st.error("❌ formations.parquet not found!")
+
 
 df_formations = df_player.loc[(df_player['type'] == "formationPlace") & (df_player['value'] > 0)]
 df_formations["pos"]  = [pos[0] for pos in df_formations["pos"]]
-
-df_events = pd.read_parquet("datasets/match_events.parquet")
-
-df_team_formations = pd.read_parquet("datasets/formations.parquet")
 
 
 def filtered_last_matches(df_events, num_matches, fixtures_list):
