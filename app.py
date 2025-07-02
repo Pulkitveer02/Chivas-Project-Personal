@@ -23,11 +23,9 @@ def load_recent_data(n_matches=2):
     df_events = df_events[df_events["match_id"].isin(recent_ids)]
 
     df_player = pd.read_parquet("datasets/player_stats.parquet")
-    df_player = df_player[df_player["match_id"].isin(recent_ids)]
 
     df_team_formations = pd.read_parquet("datasets/formations.parquet")
-    df_team_formations = df_team_formations[df_team_formations["match_id"].isin(recent_ids)]
-
+    
     return df_player, df_events, df_team_formations
 
 # Use in app
