@@ -4,322 +4,146 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mplsoccer import VerticalPitch, Pitch
 import seaborn as sns
-import pyarrow
 import io
 from matplotlib.patches import Rectangle
+from visualization_functions import *
+from matplotlib.gridspec import GridSpec
+import numpy as np
+from matplotlib import cm, colors as mcolors
 
 
-df = pd.read_parquet("datasets/player_stats.parquet")
+df_player = pd.read_parquet(r"datasets\player_stats.parquet")
 
-df_formations = df.loc[(df['type'] == "formationPlace") & (df['value'] > 0)]
+df_formations = df_player.loc[(df_player['type'] == "formationPlace") & (df_player['value'] > 0)]
 df_formations["pos"]  = [pos[0] for pos in df_formations["pos"]]
 
-df_team_formations = pd.read_parquet("datasets/formations.parquet")
+df_events = pd.read_parquet(r"datasets\match_events.parquet")
 
-# STEP 1: Get Most Common Formation Per Team
-def get_most_common_formation(df_team_formations, team_name):
-    team_data = df_team_formations[df_team_formations['team'] == team_name]
-    most_common = team_data['formation'].mode()
-    return str(most_common.iloc[0]) if not most_common.empty else None
+df_team_formations = pd.read_parquet(r"datasets\formations.parquet")
 
 
-# STEP 2: Get Most Likely Players for That Formation
-def get_likely_players(df_formations, team_name):
-    # Filter for this team
-    team_players = df_formations[df_formations['equipo'] == team_name]
-
-    # Count number of appearances per player per formation place
-    player_counts = (
-        team_players
-        .groupby(['jugador', 'value'], as_index=False)
-        .size()  # returns a column named "size"
-    .rename(columns={'size': 'appearance_count'})
-)
-
-    # Get the player with the most appearances for each formation place
-    top_players = (
-        player_counts.sort_values('appearance_count', ascending=False)
-        .drop_duplicates(subset='value', keep='first')
-        .sort_values('value')  # sort by formation place so you can plot easily
-    )
-    st.dataframe(top_players)
-
-    return top_players
-
-# STEP 3: Build DataFrame with Coordinates
-def build_formation_dataframe(players_df, formation_code, formation_coords_dict):
-    coords = formation_coords_dict.get(formation_code)
-    if coords is None or len(players_df) == 0:
-        return pd.DataFrame()
+def filtered_last_matches(df_events, num_matches, fixtures_list):
+    # Step 1: Filter formations for selected team
     
-    top_players = players_df.head(len(coords)).copy()
-    top_players['x'] = [pt[0] for pt in coords]
-    top_players['y'] = [pt[1] for pt in coords]
-    return top_players
 
-# STEP 4: Draw Formation with mplsoccer
-def plot_formation(df, team_name, formation_code):
+    # Step 3: Get last X match_ids
+    recent_match_ids = list(fixtures_list.head(num_matches))
 
-    pitch = Pitch(pitch_type='opta')
-    fig, ax = pitch.draw(figsize=(10, 7))
+    # Step 4: Filter df_events for those match_ids and team
+    filtered_events = df_events[
+        (df_events['match_id'].isin(recent_match_ids)) &
+        (df_events['team_name'] == team_selected)
+    ].copy()
 
-    
-    for i, row in df.iterrows():
-        pitch.scatter(row['x'], row['y'], s=2500, ax=ax, color=team_colors[team_name], edgecolors='black', zorder=3, marker = 's')
-        pitch.annotate(
-            row['jugador'], (row['x'], row['y']),
-            va='center', ha='center', size=10, ax=ax, zorder=4, color='white'
-        )
-    ax.set_title(f"{team_name} — {formation_code} Formation", fontsize=14)
-
-    return fig
+    return filtered_events
 
 
 
-def formation_usage_streamlit(df, team_name):
-    """
-    Streamlit version of formation usage visualization.
-    - Displays value_counts
-    - Plots bar chart in Streamlit
-    """
 
-    df = df[df['team'] == team_name]
-    # Get value counts
-    formation_counts = df["formation"].value_counts()
+# SAQUES DE META
 
-    # Plot
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.barplot(
-        x=formation_counts.index,
-        y=formation_counts.values,
-        palette="viridis",
-        ax=ax
-    )
-    ax.set_title("Formation Usage Frequency", fontsize=16, weight='bold')
-    ax.set_xlabel("Formation")
-    ax.set_ylabel("Count")
-    ax.tick_params(axis='x', rotation=45)
+def saques_df(df, team_selected):
 
-    sns.despine(ax=ax)
-    st.pyplot(fig)  # Show the figure in the app
+    bg_colour = "#0E1F81"
+    text_colour = "#c7d5cc"
 
 
-### FORMATION FOR THE TEAMS
-formation_coordinates_opta = {
-    "532": [
-        (5,50),    # 1: GK
-        (25,10),   # 2: RWB
-        (25,90),   # 3: LWB
-        (20,70),   # 6: RCB
-        (20,50),   # 5: CB
-        (20,30),   # 4: LCB
-        (55,35),   # 7: RAM
-        (40,50),   # 8: CM
-        (75,65),   # 9: LST
-        (75,35),   # 10: RST
-        (55,65)    # 11: LAM
-    ],
-    "433": [
-        (5,50),    # 1: GK
-        (20,10),   # 2: RB
-        (20,90),   # 3: LB
-        (40,50),   # 4: CDM
-        (20,35),   # 5: RCB
-        (20,65),   # 6: LCB
-        (55,35),   # 7: RAM
-        (55,65),   # 8: LAM
-        (80,50),   # 9: ST
-        (70,10),   # 10: RW
-        (70,90)    # 11: LW
-    ],
-    "442": [
-        (5,50),    # 1: GK
-        (25,10),   # 2: RB
-        (25,90),   # 3: LB
-        (50,40),   # 4: RCM
-        (20,35),   # 5: RCB
-        (20,65),   # 6: LCB
-        (50,10),   # 7: RW
-        (50,60),   # 8: LCM
-        (70,60),   # 9: LCF
-        (70,40),   # 10: RCF
-        (50,90)    # 11: LW
-    ],
-    "4231": [
-        (5,50), (25,10), (25,90), (40,70), (20,35),
-        (20,65), (60,10), (40,30), (80,50), (60,50), (60,90)
-    ],
-    "3421": [
-        (5,50), (40,10), (40,90), (25,70), (25, 50),
-        (25,30), (40, 35), (40, 65), (80, 50), (65,35), (65,65)
-    ],
-    "3511": [
-        (5,50), (40,10), (40, 90), (25,70), (25, 50),
-        (25,30), (60,35), (60,65), (80,50), (60,50), (40,50)
-    ],
-    "343": [
-        (5,50), (40,10), (40,90), (25,70), (25,50),
-        (25,30), (50,35), (50,65), (75,50), (65,10), (65,90)
-    ],
-    "352": [
-        (5,50), (40,10), (40, 90), (25,70), (25, 50),
-        (25,30), (60,35), (60,65), (80,50), (60,50), (60,50)
-    ],
-    "3241": [
-        (5,50), (40,35), (40,65), (25,70), (25, 50),
-        (25,30), (65,35), (65,65), (80,50), (65,10), (65,90)
-    ],
-    "3412": [
-        (5,50), (40,10), (40, 90), (25,70), (25, 50),
-        (25,30), (55,35), (55,65), (70,50), (80,35), (80,65)
-    ],
-    "4312": [
-        (5,50), (25,10), (25,90), (40,50), (20,35),
-        (20,65), (40,30), (60,50), (80,35), (80,65), (40,70)
-    ],
-    "4141": [
-        (5,50),    # 1: GK
-        (25,10),   # 2: RB
-        (25,90),   # 3: LB
-        (40,50),   # 4: CDM
-        (20,35),   # 5: RCB
-        (20,65),   # 6: LCB
-        (60,10),   # 7: RW
-        (60,35),   # 8: RCM
-        (80,60),   # 9: CF
-        (60,65),   # 10: LCM
-        (60,90)    # 11: LW
-    ],
-    "4132": [
-        (5,50),    # 1: GK
-        (25,10),   # 2: RB
-        (25,90),   # 3: LB
-        (40,50),   # 4: CDM
-        (20,35),   # 5: RCB
-        (20,65),   # 6: LCB
-        (60,10),   # 7: RW
-        (60,50),   # 8: CAM
-        (80,35),   # 9: RCF
-        (80,65),   # 10: LCF
-        (60,90)    # 11: LW
-    ],
-    "541": [
-        (5,50),    # 1: GK
-        (40,10),   # 2: RWB
-        (40,90),   # 3: LWB
-        (25,70),   # 4: RCB
-        (25,50),   # 5: CB
-        (25,30),   # 6: LCB
-        (55,10),   # 7: RW
-        (55,35),   # 8: RCM
-        (75,65),   # 9: ST
-        (55,65),   # 10: LCM
-        (55,90)    # 11: LW
-    ],
-    "451": [
-        (5,50), (25,90), (25,10), (20,65), (20,35),
-        (40,90), (40,65), (40,50), (40,35), (60,50), (80,50)
-    ],
-    "3142": [
-        (5,50), (25,50), (25,35), (25,65), (40,90),
-        (40,50), (40,10), (70,35), (70,65), (60,50), (80,50)
-    ],
-    "4411": [
-        (5,50), (25,90), (25,10), (20,65), (20,35),
-        (40,90), (40,65), (40,35), (70,50), (60,50), (80,50)
-    ],
-    "41212": [
-        (5,50), (25,90), (25,10), (20,65), (20,35),
-        (40,50), (60,35), (60,65), (70,50), (60,50), (80,50)
-    ],
-    "4222": [
-        (5,50), (25,90), (25,10), (20,65), (20,35),
-        (40,50), (60,90), (60,35), (70,50), (60,50), (80,50)
+    goal_kick_columns = [
+        "match_id",
+        "team_id",
+        "player_id",
+        "player_name",
+        "event_id",
+        "time_min",
+        "time_sec",
+        "x",                 # Starting location of goal kick
+        "y",
+        "Pass End X",        # Where the ball was played to
+        "Pass End Y",
+        "outcome",
+        "event_type",        # Should be "Goal Kick" or "Pass"
+        "Goal Kick",         # Boolean or label marking it as a goal kick
+        "Next event Goal-Kick",  # If this is the event before a goal kick
+        "GK kick from hands",    # If goalkeeper kicked from hands
+        "GK X Coordinate",       # Goalkeeper location
+        "GK Y Coordinate",
+        "GK x coordinate time of goal",  # If goal resulted from kick
+        "GK y coordinate time of goal",
+        "Kick Off",           # Sometimes used as context
+        "Long ball",          # If it was a long delivery
+        "Launch",             # If it was launched into a specific zone
+        "Touch type pass",    # Eg. foot or hand
+        "Touch type clearance", # Sometimes confused with kicks
+        "Direction of Play",  # Helps visualize properly
+        "Zone",               # Starting zone
+        "Length"
     ]
-}
 
-### TEAM COLOURS
-team_colors = {
-    "Deportivo Toluca FC": "#E00000",  # Red
-    "CF América": "#FFF200",           # Yellow
-    "CF Cruz Azul": "#1F60A6",         # Blue
-    "Club Tigres UANL": "#FDB913",     # Gold
-    "Club Necaxa": "#E31920",          # Red
-    "Club León": "#007A53",            # Green
-    "CF Pachuca": "#1A2E6B",           # Navy Blue
-    "CF Monterrey": "#003366",         # Dark Blue
-    "Club Universidad Nacional": "#003366",  # Dark Blue
-    "FC Juárez": "#77B200",            # Bright Green
-    "Querétaro FC": "#00529C",         # Blue
-    "Atlético de San Luis": "#E31920", # Red
-    "Club Santos Laguna": "#009345",   # Green
-    "Club Tijuana Xoloitzcuintles de Caliente": "#D71921",  # Red
-    "Atlas FC": "#E31920",             # Red
-    "CD Guadalajara": "#E31920",       # Red
-    "Mazatlán FC": "#5E378F",          # Purple
-    "Club Puebla": "#00529C"           # Blue
-}
+    team_filter = df["team_name"] == team_selected
 
-
-
-### DEFENSE
-# POSSESSIONS WON VISUALIZATION
-
-def possession_wins(df, team):
-
-
-    possession_win_metrics = ["possWonDef3rd", "possWonMid3rd", "possWonAtt3rd"]
-
-    pos_win = df.loc[(df["type"].isin(possession_win_metrics)) & (df["equipo"] == team)]
-    pos_win = pos_win.groupby(["equipo", "type"])["value"].sum().reset_index()
-
-    att = pos_win.loc[pos_win["type"] == 'possWonAtt3rd']["value"].iloc[0]
-    mid = pos_win.loc[pos_win["type"] == 'possWonMid3rd']["value"].iloc[0]
-    defen = pos_win.loc[pos_win["type"] == 'possWonDef3rd']["value"].iloc[0]
-
-    st.write(f"Possessions won by {team}\n\n Att: {att}, Mid: {mid}, Def: {defen}")
+    gk_df = df.loc[(df['event_type'] == 'Pass') & team_filter & ((~df["Goal Kick"].isna()) | (~df["GK kick from hands"].isna()))].copy()
     
-    values = np.array([att, mid, defen])
-    norm_vals = (values - values.min()) / (values.max() - values.min())
 
-    # Set a colormap
-    cmap = plt.cm.Reds
+    gk_df = gk_df[goal_kick_columns]
+    
+    gk_df["is_long"] = gk_df["Length"] > 32
 
-    # Thirds rectangles
-    third_heights = [33.3, 33.3, 33.3]  # 1/3rd each for half pitch
-    y_starts = [0, 33.3, 66.6]
+    long_gk = (gk_df['is_long'] == True).sum()
+    short_gk = (gk_df['is_long'] == False).sum()
+    avg_distance = round(gk_df['Length'].mean() * 1.05, 2)
 
+    #Complete & Incomplete GKs
+    gk_complete = gk_df[(gk_df["outcome"] == 1)]
+    gk_incomplete = gk_df[(gk_df["outcome"] == 0)]
 
-    # Visualize on a vertical pitch
-    pitch = Pitch(
-    pitch_type='opta',  
-    pad_left=0,     # Reduce padding around the pitch
-    pad_right=0,
-    pad_top=0,
-    pad_bottom=0
-)
-    fig, ax = pitch.draw(figsize=(3, 4))  # << Smaller figure size!
+    
+    # Create the figure
+    fig = plt.figure(figsize=(16, 11))
+    gs = GridSpec(3, 1, height_ratios=[1.2, 11, 1.5], figure=fig)
+    fig.patch.set_facecolor(bg_colour)
 
-    # Draw each third as a colored rectangle
-    for i, (y_start, val) in enumerate(zip(y_starts, norm_vals)):
-        color = cmap(val)  # color intensity
-        rect = Rectangle(
-            (y_start, 0),
-            width=33.3,
-            height=100,
-            color=color,
-            alpha=0.7,
-            zorder=0,
-        )
-        ax.add_patch(rect)
+    # Header (ax1)
+    ax1 = fig.add_subplot(gs[0])
+    ax1.axis('off')
+    ax1.set_facecolor(bg_colour)
+    ax1.text(0.01, 0.5, f"Equipo: {team_selected}", fontsize=18, color=text_colour, va='center', ha='left')
+    ax1.text(0.99, 0.5, "Saques de Meta", fontsize=24, color='gold', va='center', ha='right', weight='bold')
 
-    # Add labels
-    pitch.annotate(f"{defen}\nDef Third", xy=(25, 50), ha='center', va='center', fontsize=5, ax=ax)
-    pitch.annotate(f"{mid}\nMid Third", xy=(50, 50), ha='center', va='center', fontsize=5, ax=ax)
-    pitch.annotate(f"{att}\nAtt Third", xy=(75, 50), ha='center', va='center', fontsize=5, ax=ax)
+    # Pitch (ax2)
+    ax2 = fig.add_subplot(gs[1])
+    pitch = Pitch(pitch_type='opta', pitch_color=bg_colour, line_color=text_colour)
+    pitch.draw(ax=ax2)
 
+    pitch.arrows(gk_complete["x"], gk_complete["y"],
+                 gk_complete["Pass End X"], gk_complete["Pass End Y"], width=2,
+                 headwidth=10, headlength=10, color=text_colour, ax=ax2, label='Accurate GK')
+
+    pitch.arrows(gk_incomplete["x"], gk_incomplete["y"],
+                 gk_incomplete["Pass End X"], gk_incomplete["Pass End Y"], width=2,
+                 headwidth=6, headlength=5, headaxislength=12,
+                 color="#f33f2f", ax=ax2, label='inaccurate GK')
+
+    ax2.legend(facecolor=bg_colour, handlelength=5, edgecolor='None', fontsize=14, loc='upper left', labelcolor=text_colour)
+
+    # Stats (ax3)
+    ax3 = fig.add_subplot(gs[2])
+    ax3.axis('off')
+    ax3.set_facecolor('#22312b')
+    ax3.text(0.2, 0.9, f"Saques total: {gk_df.shape[0]}", fontsize=16, color=text_colour, ha='left')
+    ax3.text(0.2, 0.6, f"Saques largos: {long_gk}", fontsize=16, color=text_colour, ha='left')
+    ax3.text(0.2, 0.3, f"Saques cortos: {short_gk}", fontsize=16, color=text_colour, ha='left')
+
+    ax3.text(0.7, 0.8, f"Distancia promedia: {avg_distance} m", fontsize=16, color=text_colour, ha='center')
+    # ax3.text(0.7, 0.4, f"Long GK accuracy: ", fontsize=16, color=text_colour, ha='center')
 
     st.pyplot(fig)
+
+
+
+
+
+
+
 
 
 # Assuming df_formations and df_team_formations are preloaded
@@ -328,20 +152,18 @@ def possession_wins(df, team):
 
 
 
-st.title("Chivas - Team Formation Visualizer")
+st.title("Chivas - Analisis de Rival")
 team_selected = st.selectbox("Selcciona Equipo a Analizar", sorted(df_team_formations['team'].unique()))
 
 #Filtros
 #Rival
-rival_selected = st.selectbox("Selcciona Rival", sorted(df_team_formations['team'].unique()))
+# rival_selected = st.selectbox("Selcciona Rival", sorted(df_team_formations['team'].unique()))
 #Condicion
-condicion_selected = st.selectbox("Condición del equipo", ["Home", "Away"])
+# condicion_selected = st.selectbox("Condición del equipo", ["Home", "Away"])
 # Visual Cantidad de partidos
 # Obtener fixtures únicos de ese equipo
 unique_fixtures = df_team_formations[df_team_formations['team'] == team_selected]['fixture_id'].drop_duplicates()
 
-# Slider para seleccionar número de últimos partidos (limitado al número de fixtures únicos disponibles)
-num_matches = st.slider("Seleccione cantidad de partidos", min_value=1, max_value=len(unique_fixtures), value=5)
 
 if team_selected:
     formation = get_most_common_formation(df_team_formations, team_selected)
@@ -349,7 +171,7 @@ if team_selected:
     if formation:
         st.markdown(f"### Most Common Formation: `{formation}`")
         
-        likely_players = get_likely_players(df_formations, team_selected)
+        likely_players = get_likely_players(df_formations, df_player, team_selected)
         formation_df = build_formation_dataframe(likely_players, formation, formation_coordinates_opta)
         
         if not formation_df.empty:
@@ -362,196 +184,400 @@ if team_selected:
 
 formation_usage_streamlit(df_team_formations, team_selected)
 
-st.title("Defense")
 
-possession_wins(df, team_selected)
+# Slider para seleccionar número de últimos partidos (limitado al número de fixtures únicos disponibles)
+num_matches = st.slider("Seleccione cantidad de partidos anteriores", min_value=1, max_value=len(unique_fixtures), value=5)
 
+df_events_filtered = filtered_last_matches(df_events, num_matches, unique_fixtures)
 
+st.subheader(f"Ultimos {num_matches} Partidos seleccionados")
 
-# def map_formation_coords(formation_type, players_df):
+st.title("Ofensivo")
+st.subheader("Saques de Meta")
 
-#     players_df = players_df.loc[(~players_df["Formation Place"].isna())]
+saques_df(df_events_filtered, team_selected)
 
-#     plot_players = []
 
-#     for index, row in players_df.iterrows():
-#         player = {'Number' : row['Shirt Number'], 'Formation Place' : row['Formation Place']}
-#         plot_players.append(player)
 
-#     positions = formation_templates.get(formation_type)
-#     if not positions:
-#         raise ValueError(f"Formation {formation_type} not supported.")
 
-#     mapped = {}
-#     for player in plot_players:
-#         place = int(player['Formation Place']) - 1  # 0-based index
-#         if 0 <= place < len(positions):
-#             mapped[player['Number']] = positions[place]
-#     return mapped
+st.subheader("Zonas de Ataque")
 
+def plot_attack_zones(df, team_name):
+    # Step 1: Filter for selected team
+    team_df = df[df['team_name'] == team_name].copy()
 
+    # Step 2: Define attacking events
+    attacking_events = ['Pass', 'Take On', 'Goal']
 
-# def visualize_formation(mapped_positions, title="Team Formation"):
-#     pitch = Pitch(pitch_type='opta', line_color='black')
-#     fig, ax = pitch.draw(figsize=(10, 7))
+    # Step 3: Filter for successful attacking actions in the attacking half
+    attack_df = team_df[
+        (team_df['event_type'].isin(attacking_events)) &
+        (team_df['outcome'] == 1) &
+        (team_df['x'] > 50)
+    ].copy()
 
-#     for name, (x, y) in mapped_positions.items():
-#         pitch.scatter(x, y, ax=ax, s=600, color='red', edgecolors='black', zorder=2)
-#         pitch.annotate(name, (x, y), ax=ax, va='center', ha='center', fontsize=9, color='white', weight='bold')
+    # Step 4: Drop rows with missing y
+    attack_df = attack_df.dropna(subset=['y'])
 
-#     ax.set_title(title, fontsize=14)
-    
-#     st.pyplot(fig)
+    # Step 5: Zone classification based on y
+    def classify_zone(y):
+        if y < 21:
+            return 'IZ'   # Inner Left Wing
+        elif y < 37:
+            return 'CI'   # Centre-Left
+        elif y < 63:
+            return 'C'    # Central
+        elif y < 79:
+            return 'CD'   # Centre-Right
+        else:
+            return 'D'    # Right Wing
 
+    attack_df['attack_zone'] = attack_df['y'].apply(classify_zone)
 
-### MATCH MOMENTUM
+    # Step 6: Calculate zone percentages
+    zone_counts = (
+        attack_df['attack_zone'].value_counts(normalize=True) * 100
+    ).round(1).reindex(['IZ', 'CI', 'C', 'CD', 'D'], fill_value=0.0)
 
+    # Step 7: Set up vertical pitch and color mapping
+    norm = mcolors.Normalize(vmin=0, vmax=40)
+    cmap = cm.RdYlGn
+    pitch = VerticalPitch(pitch_type='opta', half=True, pad_left=0, pad_right=0)
+    fig, ax = pitch.draw(figsize=(4, 5))
 
-# def match_momentum_df(df, match_id):
-#     df = df[df["Match ID"] == match_id]
+    # Step 8: Define zones (x, y, width, height)
+    zones = {
+        'IZ': (79, 50, 21, 50),
+        'CI': (63, 50, 16, 50),
+        'C' : (37, 50, 26, 50),
+        'CD': (21, 50, 16, 50),
+        'D' : (0,  50, 21, 50)
+    }
 
-#     return df
+    for zone, (x, y, w, h) in zones.items():
+        pct = zone_counts.get(zone, 0)
+        color = cmap(norm(pct))
+        rect = Rectangle((x, y), w, h, color=color, alpha=0.4, zorder=1)
+        ax.add_patch(rect)
 
-# import matplotlib.pyplot as plt
+    # Step 9: Add annotations
+    annotations = {
+        'IZ': (75, 85),
+        'CI': (75, 70),
+        'C' : (75, 50),
+        'CD': (75, 30),
+        'D' : (75, 15)
+    }
 
+    for zone, (x_anno, y_anno) in annotations.items():
+        pitch.annotate(f"{zone_counts[zone]}%\n{zone}", xy=(x_anno, y_anno),
+                       ha='center', va='center', fontsize=6, ax=ax)
 
-# def plot_momentum(df):
-#     # Team names and IDs
-#     home_team_id = df.columns[5].split("_")[0]
-#     away_team_id = df.columns[6].split("_")[0]
+    # Step 10: Prepare summary table
+    zone_table = pd.DataFrame({
+        'Zone': zone_counts.index,
+        'Action %': zone_counts.values
+    })
 
-#     # Extract minutes and momentum values
-#     minutes = df["minute"]
-#     home_momentum = df[f"{home_team_id}_momentum"]
-#     away_momentum = -df[f"{away_team_id}_momentum"]  # negative for 4th quadrant
+    return fig, zone_table
 
-#     # Plotting
 
-#     fig, ax = plt.subplots(figsize=(14, 6))
+fig, zone_table = plot_attack_zones(df_events_filtered, team_selected)
 
-#     # Plot the bars
-#     ax.bar(minutes, home_momentum, color='red', label=home_team_id)
-#     ax.bar(minutes, away_momentum, color='blue', label=away_team_id)
+st.pyplot(fig)
 
-#     ax.axhline(0, color='black', linewidth=0.8)
-#     ax.set_xlabel("Minute")
-#     ax.set_ylabel("Momentum")
-#     ax.set_title(f"Momentum Bar Chart: {home_team_id} vs {away_team_id}")
-#     ax.legend(loc='upper left')
-#     ax.grid(axis='y', linestyle='--', alpha=0.7)
 
-#     st.pyplot(fig)
 
 
 
+st.subheader("Passes")
 
+def passes_filter_df(df, team_selected, zone_selected, player_selected):
+    # 1. Require team selection
+    if not team_selected:
+        st.warning("Please select a team.")
+        st.stop()
 
+    # 2. Filter only pass events
+    pass_df = df[df["event_type"] == "Pass"]
 
+    # 3. Column selection
+    columns_to_keep = [
+        'match_id', 'team_id', 'player_id', 'player_name',
+        'x', 'y', 'Pass End X', 'Pass End Y', 'outcome',
+        'time_min', 'time_sec', 'event_id', "Zone", "Length", "team_name"
+    ]
+    pass_df = pass_df[columns_to_keep]
 
+    # 4. Apply filters
+    team_filter = pass_df['team_name'] == team_selected
 
-# st.title("📊 Proyecto Chivas – Analisis de Rival")
+    # Show all zones if none selected
+    if not zone_selected:
+        zone_filter = pass_df['Zone'].notna()
+    else:
+        zone_filter = pass_df['Zone'].isin(zone_selected)
 
-# @st.cache_data
-# def load_data():
-#     df_team = pd.read_csv("team_stats.csv")
-#     df_player = pd.read_csv("player_stats.csv")
-#     df_match_momentum = pd.read_csv("match_momentum.csv")
+    # Show all players if none selected
+    if not player_selected:
+        player_filter = pass_df['player_name'].notna()
+    else:
+        player_filter = pass_df['player_name'].isin(player_selected)
 
-#     return df_team, df_player, df_match_momentum
+    # 5. Final filtered DF
+    pass_df = pass_df.loc[team_filter & zone_filter & player_filter].reset_index(drop=True)
 
-# df_team, df_player, df_match_momentum = load_data()
+    return pass_df
 
 
-# equipo = st.selectbox('Seleccione un equipo', df_team["Team ID"].sort_values().unique(), index = None)  
-# jornada = st.selectbox('Seleccione la jornada', df_team["Week"].sort_values().unique(), index = None)
-# filtered_df_team = filter_team_data(df_team, equipo, jornada)
-# filtered_df_player = filter_player_data(df_player, equipo, jornada)
+def pass_df_treatment(passes_df):
 
+    bg_colour = "#0E1F81"
+    text_colour = "#c7d5cc"
 
-# st.subheader("Team DataFrame")
-# st.dataframe(filtered_df_team)
 
 
-# st.subheader("Player DataFrame")
-# st.dataframe(filtered_df_player)
+    # Filter passes
+    pass_df_complete = passes_df[passes_df["outcome"] == 1]
+    pass_df_incomplete = passes_df[passes_df["outcome"] == 0]
 
+    fwd_pass_df = passes_df[passes_df["Pass End X"] > passes_df["x"]]
+    bck_pass_df = passes_df[passes_df["x"] >= passes_df["Pass End X"]]
 
-# ## PLOT FORMATIONS
+    passes_attempted = passes_df.shape[0]
+    passes_completed = pass_df_complete.shape[0]
+    # passing_accuracy = round(passes_completed / passes_attempted * 100, 2)
+    fwd_passes = fwd_pass_df.shape[0]
+    back_passes = bck_pass_df.shape[0]
 
+    # Create the figure
+    fig = plt.figure(figsize=(16, 11))
+    gs = GridSpec(3, 1, height_ratios=[1.2, 11, 1.5], figure=fig)
+    fig.patch.set_facecolor(bg_colour)
 
-# relevant_team = filtered_df_team.iloc[0]
-# st.subheader(f"{relevant_team["Match Description"]}")
-# st.write(f"**Fecha:** {relevant_team["Date"]} | **Horario:** {relevant_team["Time"]}")
+    # Header (ax1)
+    ax1 = fig.add_subplot(gs[0])
+    ax1.axis('off')
+    ax1.set_facecolor(bg_colour)
+    ax1.text(0.01, 0.5, f"Equipo: {team_selected}", fontsize=18, color=text_colour, va='center', ha='left')
+    ax1.text(0.5, 0.5, f"Zona(s): {zone_selected}", fontsize=18, color=text_colour, va='center', ha='center')
+    ax1.text(0.99, 0.5, "Mapa de Pases", fontsize=24, color='gold', va='center', ha='right', weight='bold')
 
-# formation = str(relevant_team["Formation"])
-# st.subheader(f"Formation: {"-".join(formation)}")
+    # Pitch (ax2)
+    ax2 = fig.add_subplot(gs[1])
+    pitch = Pitch(pitch_type='opta', pitch_color=bg_colour, line_color=text_colour)
+    pitch.draw(ax=ax2)
 
-# mapped_positions = map_formation_coords(formation, filtered_df_player)
-# visualize_formation(mapped_positions, title=f"{formation} Formation")
+    pitch.arrows(pass_df_complete["x"], pass_df_complete["y"],
+                 pass_df_complete["Pass End X"], pass_df_complete["Pass End Y"], width=2,
+                 headwidth=10, headlength=10, color=text_colour, ax=ax2, label='Pases completados')
 
+    pitch.arrows(pass_df_incomplete["x"], pass_df_incomplete["y"],
+                 pass_df_incomplete["Pass End X"], pass_df_incomplete["Pass End Y"], width=2,
+                 headwidth=6, headlength=5, headaxislength=12,
+                 color="#f33f2f", ax=ax2, label='Pases incompletos')
 
-# ## PLOT MATCH MOMENTUM
-# st.subheader("Match Momentum")
+    ax2.legend(facecolor=bg_colour, handlelength=5, edgecolor='None', fontsize=14, loc='upper left', labelcolor=text_colour)
 
-# match_id = filtered_df_team["Match ID"].iloc[0]
-# filtered_df_momentum = match_momentum_df(df_match_momentum, match_id)
+    # Stats (ax3)
+    ax3 = fig.add_subplot(gs[2])
+    ax3.axis('off')
+    ax3.set_facecolor('#22312b')
+    ax3.text(0.2, 0.9, f"Passes Attempted: {passes_attempted}", fontsize=16, color=text_colour, ha='left')
+    ax3.text(0.2, 0.6, f"Passes Completed: {passes_completed}", fontsize=16, color=text_colour, ha='left')
+    # ax3.text(0.2, 0.3, f"Accuracy: {passing_accuracy}%", fontsize=16, color=text_colour, ha='left')
 
-# # st.dataframe(filtered_df_momentum)
+    ax3.text(0.7, 0.8, f"Forward Passes: {fwd_passes}", fontsize=16, color=text_colour, ha='center')
+    ax3.text(0.7, 0.4, f"Backward Passes: {back_passes}", fontsize=16, color=text_colour, ha='center')
 
-# plot_momentum(filtered_df_momentum)
+    st.pyplot(fig)
 
+zone_selected = st.multiselect("Selcciona la zona", options=(df_events["Zone"].unique()), default=None)
+player_selected = st.multiselect("Selcciona los jugadores", options=(df_events[df_events["team_name"] == team_selected]["player_name"].unique()), default=None)
 
 
+pass_df = passes_filter_df(df_events_filtered, team_selected, zone_selected, player_selected)
+st.dataframe(pass_df)
+pass_df_treatment(pass_df)
 
 
 
-# st.subheader("Possession con balon")
 
-# def pass_acc_plot(df):
-#     labels = df[["accurateFwdZonePass", "totalFwdZonePass", "accurateBackZonePass", "totalBackZonePass"]]
+def plot_defensive_stats(df, team_name, selected_events=None):
+    df.columns = df.columns.str.strip()
+    df_team = df[df["team_name"] == team_name]
+    def_df = df_team[df_team["Defensive"] == 1].copy()
 
-#     fig, ax = plt.subplots()
-#     ax.bar()
-    
+    all_event_types = list(def_df["event_type"].unique())
+    if selected_events:
+        def_df = def_df[def_df["event_type"].isin(selected_events)]
 
-    
+    duel_df = def_df.copy().dropna(subset=["x", "y", "outcome", "event_type"])
 
+    pitch = Pitch(pitch_type='opta', line_zorder=2)
+    fig, ax = pitch.draw(figsize=(10, 6))
 
+    event_markers = {
+        'Aerial': 'o',
+        'Foul': 'x',
+        'Tackle': '^',
+        'Blocked Pass': 's',
+        'Dispossessed': 'D',
+        'Challenge': 'P',
+        'Take On': '*',
+        'Interception': 'H'
+    }
+    colors = {1: 'green', 0: 'red'}
 
+    for event_type in duel_df["event_type"].unique():
+        for outcome in [0, 1]:
+            subset = duel_df[(duel_df['event_type'] == event_type) & (duel_df['outcome'] == outcome)]
+            pitch.scatter(subset['x'], subset['y'], ax=ax,
+                          marker=event_markers.get(event_type, 'o'),
+                          color=colors[outcome],
+                          label=f'{event_type} - {"Success" if outcome == 1 else "Fail"}',
+                          alpha=0.6, edgecolors='black', linewidth=0.5)
 
+    ax.set_title("Defensive Events and Outcomes", fontsize=16)
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1), ncol=3)
 
+    attempts = def_df.groupby("event_type").size().rename("Attempted")
+    successes = def_df[def_df["outcome"] == 1].groupby("event_type").size().rename("Successful")
+    def_stats = pd.concat([attempts, successes], axis=1).fillna(0)
+    def_stats["Success %"] = round((def_stats["Successful"] / def_stats["Attempted"]) * 100, 2)
+    def_stats = def_stats.reset_index().rename(columns={"event_type": "Event Type"})
 
+    return fig, def_stats, all_event_types
 
-    
 
+def plot_attacking_stats(df, team_name, selected_events=None):
+    df.columns = df.columns.str.strip()
+    df_team = df[df["team_name"] == team_name]
 
-# else:
-#     df = df_player.copy()
-#     stats = [col for col in df.columns]
+    att_list = list(df_team.loc[(~df_team["Offensive"].isna()), "event_type"].unique())
+    att_list = [event for event in att_list if event not in ["Pass", "Deleted event"]]
 
-#     jugadores = sorted(df['Player ID'].unique())
-#     jornadas = sorted(df['Week'].unique())
-    
+    if selected_events:
+        att_list = selected_events
 
-#     col1, col2 = st.columns(2)
+    att_df = df_team[df_team["event_type"].isin(att_list)].copy()
+    att_df = att_df.dropna(subset=["x", "y", "outcome", "event_type"])
 
-    
-#     with col1:
-#         jugador_sel = st.selectbox("Player ID", ["Todos"] + jugadores)
+    pitch = Pitch(pitch_type='opta', line_zorder=2)
+    fig, ax = pitch.draw(figsize=(10, 6))
 
-#     with col2:
-#         jornada_sel = st.selectbox("Week", ["Todos"] + jornadas)
-    
-#     if jugador_sel != "Todos":
-#         df = df[df['Player ID'] == jugador_sel]
-#     if jornada_sel != "Todas":
-#         df = df[df['Week'] == int(jornada_sel)]
+    event_markers = {
+        'Aerial': 'o',
+        'Foul': '^',
+        'Take On': '*',
+        'Tackle': 'D',
+        'Challenge': 'P',
+        'Dispossessed': 'v'
+    }
+    colors = {1: 'green', 0: 'red'}
 
+    for event_type in att_df["event_type"].unique():
+        for outcome in [0, 1]:
+            subset = att_df[(att_df['event_type'] == event_type) & (att_df['outcome'] == outcome)]
+            pitch.scatter(
+                subset["x"], subset["y"], ax=ax,
+                color=colors[outcome],
+                marker=event_markers.get(event_type, 'o'),
+                alpha=0.6, label=f"{event_type} - {'Success' if outcome == 1 else 'Fail'}",
+                edgecolors='black', linewidth=0.5
+            )
 
-    
+    ax.set_title("Attacking Events and Outcomes", fontsize=16)
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1), ncol=3)
 
+    attempts = att_df.groupby("event_type").size().rename("Attempted")
+    successes = att_df[att_df["outcome"] == 1].groupby("event_type").size().rename("Successful")
+    att_stats = pd.concat([attempts, successes], axis=1).fillna(0)
+    att_stats["Success %"] = round((att_stats["Successful"] / att_stats["Attempted"]) * 100, 2)
+    att_stats = att_stats.reset_index().rename(columns={"event_type": "Event Type"})
 
+    return fig, att_stats, list(set(att_list))
 
 
-    
+
+# ---- Streamlit UI ----
+st.title("Team Event Stats Visualizer")
+
+
+# Choose visualisation type
+vis_type = st.radio("Choose visualisation type:", ["Defensive", "Attacking"])
+
+
+
+if vis_type == "Defensive":
+    _, full_stats_df, all_def_events = plot_defensive_stats(df_events, team_selected)
+    selected_def_events = st.multiselect("Select defensive event types to show on pitch:", all_def_events, default=all_def_events)
+    fig, filtered_stats_df, _ = plot_defensive_stats(df_events, team_selected, selected_def_events)
+
+else:
+    _, full_stats_df, all_att_events = plot_attacking_stats(df_events, team_selected)
+    selected_att_events = st.multiselect("Select attacking event types to show on pitch:", all_att_events, default=all_att_events)
+    fig, filtered_stats_df, _ = plot_attacking_stats(df_events, team_selected, selected_att_events)
+
+# Add stats table to the visualization itself
+# Select top 5-8 rows to fit cleanly
+table_df = filtered_stats_df.head(8)  # adjust as needed for space
+
+ax = fig.axes[0]  # get the main axis from the pitch
+
+# Display plot with table
+st.pyplot(fig)
+
+# Show complete table separately (not filtered)
+st.subheader("Full Summary Table")
+st.dataframe(full_stats_df)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# def big_chance(df, team):
+#     big_chances = ["bigChanceCreated", "bigChanceScored", "bigChanceMissed"]
+
+#     big_chances = df.loc[(df["type"].isin(big_chances)) & (df["equipo"] == team)]
+#     big_chances = big_chances.groupby(["equipo", "type"])["value"].sum().reset_index()
+
+#     st.dataframe(big_chances)
+
+
+# def set_pieces(df, team):
+#     corners = ["totalCornersIntobox", "accurateCornersIntobox"]
+
+#     fk_indirecto = ["freekickCross", "accurateFreekickCross"]
+
+#     fk_directo = ["attFreekickTotal", "attFreekickTarget", "attFreekickPost", "attFreekickGoal", "attFreekickMiss"]
+
+#     saque_banda = ["totalThrows", "accurateThrows"]
+
+
+#     corners_df = df.loc[(df["type"].isin(corners)) & (df["equipo"] == team)]
+#     corner_takers = corners_df.groupby(["jugador", "type"])["value"].sum().reset_index().sort_values(by="value", ascending=False)
+#     corners_df = corners_df.groupby(["equipo", "type"])["value"].sum().reset_index()
+
+#     indirecto_df = df.loc[(df["type"].isin(fk_indirecto)) & (df["equipo"] == team)]
+#     fk_takers = indirecto_df.groupby(["jugador", "type"])["value"].sum().reset_index().sort_values(by="value", ascending=False)
+#     indirecto_df = indirecto_df.groupby(["equipo", "type"])["value"].sum().reset_index()
+
+#     st.dataframe(corner_takers)
+#     st.dataframe(corners_df)
+
+#     st.dataframe(fk_takers)
+#     st.dataframe(indirecto_df)
 
