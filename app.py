@@ -28,8 +28,14 @@ else:
     st.error("❌ formations.parquet not found!")
 
 
-df_formations = df_player.loc[(df_player['type'] == "formationPlace") & (df_player['value'] > 0)]
-df_formations["pos"]  = [pos[0] for pos in df_formations["pos"]]
+# Step 1: create a safe copy
+df_formations = df_player.loc[
+    (df_player['type'] == "formationPlace") & (df_player['value'] > 0)
+].copy()
+
+# Step 2: safely modify the 'pos' column
+df_formations.loc[:, "pos"] = df_formations["pos"].str[0]
+
 
 
 def filtered_last_matches(df_events, num_matches, fixtures_list):
