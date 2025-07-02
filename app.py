@@ -4,28 +4,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mplsoccer import VerticalPitch, Pitch
 import seaborn as sns
-import io
 from matplotlib.patches import Rectangle
 from visualization_functions import *
 from matplotlib.gridspec import GridSpec
 import numpy as np
 from matplotlib import cm, colors as mcolors
 
-@st.cache_data
-def load_data():
-    df_player = pd.read_parquet("datasets/player_stats.parquet")
-    df_events = pd.read_parquet("datasets/match_events.parquet")
-    df_team_formations = pd.read_parquet("datasets/formations.parquet")
-    return df_player, df_events, df_team_formations
 
-try:
-    df_player, df_events, df_team_formations = load_data()
-except Exception as e:
-    st.error(f"Failed to load data: {e}")
-    st.stop()
+df_player = pd.read_parquet(r"datasets/player_stats.parquet")
 
 df_formations = df_player.loc[(df_player['type'] == "formationPlace") & (df_player['value'] > 0)]
 df_formations["pos"]  = [pos[0] for pos in df_formations["pos"]]
+
+df_events = pd.read_parquet(r"datasets/match_events.parquet")
+
+df_team_formations = pd.read_parquet(r"datasets/formations.parquet")
 
 
 def filtered_last_matches(df_events, num_matches, fixtures_list):
