@@ -1,9 +1,6 @@
 streamlit
 pandas
-scikit-learn
 matplotlib
 mplsoccer
 seaborn
-numpy
 pyarrow
-pip
