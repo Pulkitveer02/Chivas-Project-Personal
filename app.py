@@ -14,8 +14,7 @@ from matplotlib import cm, colors as mcolors
 @st.cache_data
 def load_recent_data(n_matches=2):
     # Step 1: Load only match_id + date from events
-    meta = pd.read_parquet("datasets/match_events.parquet", columns=["match_id", "date"])
-    meta = meta.drop_duplicates().sort_values("date", ascending=False)
+    meta = pd.read_parquet("datasets/match_events.parquet", columns=["match_id"])
     recent_ids = meta.head(n_matches)["match_id"].tolist()
 
     # Step 2: Load filtered data
