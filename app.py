@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mplsoccer import VerticalPitch, Pitch
 import seaborn as sns
-import io
 from matplotlib.patches import Rectangle
 from visualization_functions import *
 from matplotlib.gridspec import GridSpec
