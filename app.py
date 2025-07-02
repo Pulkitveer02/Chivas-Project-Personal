@@ -18,8 +18,11 @@ def load_data():
     df_team_formations = pd.read_parquet("datasets/formations.parquet")
     return df_player, df_events, df_team_formations
 
-df_player, df_events, df_team_formations = load_data()
-
+try:
+    df_player, df_events, df_team_formations = load_data()
+except Exception as e:
+    st.error(f"Failed to load data: {e}")
+    st.stop()
 
 df_formations = df_player.loc[(df_player['type'] == "formationPlace") & (df_player['value'] > 0)]
 df_formations["pos"]  = [pos[0] for pos in df_formations["pos"]]
