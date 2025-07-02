@@ -10,14 +10,28 @@ from matplotlib.gridspec import GridSpec
 import numpy as np
 from matplotlib import cm, colors as mcolors
 
+
 @st.cache_data
-def load_chivas_data():
-    df_player = pd.read_parquet("datasets/player_stats.parquet")
+def load_recent_data(n_matches=5):
+    # Step 1: Load only match_id + date from events
+    meta = pd.read_parquet("datasets/match_events.parquet", columns=["match_id", "date"])
+    meta = meta.drop_duplicates().sort_values("date", ascending=False)
+    recent_ids = meta.head(n_matches)["match_id"].tolist()
+
+    # Step 2: Load filtered data
     df_events = pd.read_parquet("datasets/match_events.parquet")
+    df_events = df_events[df_events["match_id"].isin(recent_ids)]
+
+    df_player = pd.read_parquet("datasets/player_stats.parquet")
+    df_player = df_player[df_player["match_id"].isin(recent_ids)]
+
     df_team_formations = pd.read_parquet("datasets/formations.parquet")
+    df_team_formations = df_team_formations[df_team_formations["match_id"].isin(recent_ids)]
+
     return df_player, df_events, df_team_formations
 
-df_player, df_events, df_team_formations = load_chivas_data()
+# Use in app
+df_player, df_events, df_team_formations = load_recent_data(n_matches=5)
 
 df_formations = df_player.loc[(df_player['type'] == "formationPlace") & (df_player['value'] > 0)]
 df_formations["pos"]  = [pos[0] for pos in df_formations["pos"]]
