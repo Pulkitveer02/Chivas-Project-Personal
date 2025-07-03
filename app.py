@@ -4,35 +4,31 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mplsoccer import VerticalPitch, Pitch
 import seaborn as sns
+import io
 from matplotlib.patches import Rectangle
 from visualization_functions import *
 from matplotlib.gridspec import GridSpec
 import numpy as np
 from matplotlib import cm, colors as mcolors
 
-
 @st.cache_data
-def load_recent_data(n_matches=2):
-    # Step 1: Load only match_id + date from events
-    meta = pd.read_parquet("datasets/match_events.parquet", columns=["match_id"])
-    recent_ids = meta.head(n_matches)["match_id"].tolist()
-
-    # Step 2: Load filtered data
-    df_events = pd.read_parquet("datasets/match_events.parquet")
-    df_events = df_events[df_events["match_id"].isin(recent_ids)]
-
+def load_data():
     df_player = pd.read_parquet("datasets/player_stats.parquet")
-
+    df_events = pd.read_parquet("datasets/match_events.parquet")
     df_team_formations = pd.read_parquet("datasets/formations.parquet")
-    
     return df_player, df_events, df_team_formations
 
-# Use in app
-df_player, df_events, df_team_formations = load_recent_data(n_matches=5)
+df_player, df_events, df_team_formations = load_data()
+
 
 df_formations = df_player.loc[(df_player['type'] == "formationPlace") & (df_player['value'] > 0)]
 df_formations["pos"]  = [pos[0] for pos in df_formations["pos"]]
 
+
+
+
+bg_colour = "#0E1F81"
+text_colour = "#c7d5cc"
 
 def filtered_last_matches(df_events, num_matches, fixtures_list):
     # Step 1: Filter formations for selected team
@@ -55,10 +51,6 @@ def filtered_last_matches(df_events, num_matches, fixtures_list):
 # SAQUES DE META
 
 def saques_df(df, team_selected):
-
-    bg_colour = "#0E1F81"
-    text_colour = "#c7d5cc"
-
 
     goal_kick_columns = [
         "match_id",
@@ -100,25 +92,43 @@ def saques_df(df, team_selected):
     
     gk_df["is_long"] = gk_df["Length"] > 32
 
-    long_gk = (gk_df['is_long'] == True).sum()
-    short_gk = (gk_df['is_long'] == False).sum()
     avg_distance = round(gk_df['Length'].mean() * 1.05, 2)
+
+    # Long GK Accuracy
+    long_gk_df = gk_df[gk_df["is_long"] == True]
+    long_gk_total = long_gk_df.shape[0]
+    long_gk_completed = long_gk_df[long_gk_df["outcome"] == 1].shape[0]
+    long_gk_accuracy = round((long_gk_completed / long_gk_total) * 100, 2) if long_gk_total else 0
+
+    # Short GK Accuracy
+    short_gk_df = gk_df[gk_df["is_long"] == False]
+    short_gk_total = short_gk_df.shape[0]
+    short_gk_completed = short_gk_df[short_gk_df["outcome"] == 1].shape[0]
+    short_gk_accuracy = round((short_gk_completed / short_gk_total) * 100, 2) if short_gk_total else 0
+
 
     #Complete & Incomplete GKs
     gk_complete = gk_df[(gk_df["outcome"] == 1)]
     gk_incomplete = gk_df[(gk_df["outcome"] == 0)]
 
+    # Total GKs per zone
+    zone_counts = gk_df.groupby("Zone").size()
+    # Completed GKs per zone
+    zone_completed = gk_df[gk_df["outcome"] == 1].groupby("Zone").size()
+    # Accuracy per zone
+    zone_accuracy = (zone_completed / zone_counts * 100).round(2).fillna(0)
+
     
     # Create the figure
     fig = plt.figure(figsize=(16, 11))
-    gs = GridSpec(3, 1, height_ratios=[1.2, 11, 1.5], figure=fig)
+    gs = GridSpec(3, 1, height_ratios=[1, 11, 2.5], figure=fig)
     fig.patch.set_facecolor(bg_colour)
 
     # Header (ax1)
     ax1 = fig.add_subplot(gs[0])
     ax1.axis('off')
     ax1.set_facecolor(bg_colour)
-    ax1.text(0.01, 0.5, f"Equipo: {team_selected}", fontsize=18, color=text_colour, va='center', ha='left')
+    ax1.text(0.01, 0.5, f"{team_selected}", fontsize=24, color=text_colour, va='center', ha='left', weight='bold')
     ax1.text(0.99, 0.5, "Saques de Meta", fontsize=24, color='gold', va='center', ha='right', weight='bold')
 
     # Pitch (ax2)
@@ -141,27 +151,24 @@ def saques_df(df, team_selected):
     ax3 = fig.add_subplot(gs[2])
     ax3.axis('off')
     ax3.set_facecolor('#22312b')
-    ax3.text(0.2, 0.9, f"Saques total: {gk_df.shape[0]}", fontsize=16, color=text_colour, ha='left')
-    ax3.text(0.2, 0.6, f"Saques largos: {long_gk}", fontsize=16, color=text_colour, ha='left')
-    ax3.text(0.2, 0.3, f"Saques cortos: {short_gk}", fontsize=16, color=text_colour, ha='left')
+    ax3.text(0.01, 0.9, f"Saques total: {gk_df.shape[0]}", fontsize=16, color=text_colour, ha='left')
+    ax3.text(0.01, 0.6, f"Saques largos: {long_gk_total} ({long_gk_accuracy}%)", fontsize=16, color=text_colour, ha='left')
+    ax3.text(0.01, 0.3, f"Saques cortos: {short_gk_total} ({short_gk_accuracy}%)", fontsize=16, color=text_colour, ha='left')
 
-    ax3.text(0.7, 0.8, f"Distancia promedia: {avg_distance} m", fontsize=16, color=text_colour, ha='center')
-    # ax3.text(0.7, 0.4, f"Long GK accuracy: ", fontsize=16, color=text_colour, ha='center')
+    
+    ax3.text(0.5, 1, f"Izquierda: {zone_counts["Left"]} ({zone_accuracy["Left"]}%)", fontsize=16, color=text_colour, ha='center')
+    ax3.text(0.5, 0.75, f"Central: {zone_counts["Center"]} ({zone_accuracy["Center"]}%)", fontsize=16, color=text_colour, ha='center')    
+    ax3.text(0.5, 0.5, f"Derecha: {zone_counts["Right"]} ({zone_accuracy["Right"]}%)", fontsize=16, color=text_colour, ha='center')
+    ax3.text(0.5, 0.25, f"Propia Mitad: {zone_counts["Back"]} ({zone_accuracy["Back"]}%)", fontsize=16, color=text_colour, ha='center')
 
+    ax3.text(0.99, 0.5, f"Distancia promedia: {avg_distance} m", fontsize=16, color=text_colour, ha='right')
+    
     st.pyplot(fig)
-
-
-
-
-
-
 
 
 
 # Assuming df_formations and df_team_formations are preloaded
 # and formation_coordinates_opta is imported
-
-
 
 
 st.title("Chivas - Analisis de Rival")
@@ -205,9 +212,9 @@ df_events_filtered = filtered_last_matches(df_events, num_matches, unique_fixtur
 st.subheader(f"Ultimos {num_matches} Partidos seleccionados")
 
 st.title("Ofensivo")
-st.subheader("Saques de Meta")
 
-saques_df(df_events_filtered, team_selected)
+if st.button("Generate Goal Kick Map"):
+    saques_df(df_events_filtered, team_selected)
 
 
 
@@ -317,7 +324,8 @@ def passes_filter_df(df, team_selected, zone_selected, player_selected):
     columns_to_keep = [
         'match_id', 'team_id', 'player_id', 'player_name',
         'x', 'y', 'Pass End X', 'Pass End Y', 'outcome',
-        'time_min', 'time_sec', 'event_id', "Zone", "Length", "team_name"
+        'time_min', 'time_sec', 'event_id', "Zone", "Length", "team_name",
+        "Cross"
     ]
     pass_df = pass_df[columns_to_keep]
 
@@ -344,36 +352,60 @@ def passes_filter_df(df, team_selected, zone_selected, player_selected):
 
 def pass_df_treatment(passes_df):
 
-    bg_colour = "#0E1F81"
-    text_colour = "#c7d5cc"
-
-
-
     # Filter passes
     pass_df_complete = passes_df[passes_df["outcome"] == 1]
     pass_df_incomplete = passes_df[passes_df["outcome"] == 0]
 
+    # Mathematics
     fwd_pass_df = passes_df[passes_df["Pass End X"] > passes_df["x"]]
     bck_pass_df = passes_df[passes_df["x"] >= passes_df["Pass End X"]]
 
     passes_attempted = passes_df.shape[0]
     passes_completed = pass_df_complete.shape[0]
-    # passing_accuracy = round(passes_completed / passes_attempted * 100, 2)
+
+    if passes_attempted == 0:
+        passing_accuracy = 0
+    else:
+        passing_accuracy = round(passes_completed / passes_attempted * 100, 2)
+
     fwd_passes = fwd_pass_df.shape[0]
     back_passes = bck_pass_df.shape[0]
 
+    # Length categories
+    short_passes = passes_df[passes_df["Length"] <= 15]
+    medium_passes = passes_df[(passes_df["Length"] > 15) & (passes_df["Length"] <= 30)]
+    long_passes = passes_df[passes_df["Length"] > 30]
+
+    # Short Pass Accuracy
+    short_completed = short_passes[short_passes["outcome"] == 1].shape[0]
+    short_attempted = short_passes.shape[0]
+    short_accuracy = round(short_completed / short_attempted * 100, 2) if short_attempted else 0
+
+    # Medium Pass Accuracy
+    medium_completed = medium_passes[medium_passes["outcome"] == 1].shape[0]
+    medium_attempted = medium_passes.shape[0]
+    medium_accuracy = round(medium_completed / medium_attempted * 100, 2) if medium_attempted else 0
+
+    # Long Pass Accuracy
+    long_completed = long_passes[long_passes["outcome"] == 1].shape[0]
+    long_attempted = long_passes.shape[0]
+    long_accuracy = round(long_completed / long_attempted * 100, 2) if long_attempted else 0
+
+
     # Create the figure
-    fig = plt.figure(figsize=(16, 11))
-    gs = GridSpec(3, 1, height_ratios=[1.2, 11, 1.5], figure=fig)
+    fig = plt.figure(figsize=(14, 10))
+    gs = GridSpec(3, 1, height_ratios=[1.8, 9, 2.5], figure=fig)
     fig.patch.set_facecolor(bg_colour)
 
     # Header (ax1)
     ax1 = fig.add_subplot(gs[0])
     ax1.axis('off')
     ax1.set_facecolor(bg_colour)
-    ax1.text(0.01, 0.5, f"Equipo: {team_selected}", fontsize=18, color=text_colour, va='center', ha='left')
-    ax1.text(0.5, 0.5, f"Zona(s): {zone_selected}", fontsize=18, color=text_colour, va='center', ha='center')
-    ax1.text(0.99, 0.5, "Mapa de Pases", fontsize=24, color='gold', va='center', ha='right', weight='bold')
+    ax1.text(0.01, 0.7, f"{team_selected}", fontsize=24, color='gold', va='center', ha='left', weight='bold')
+    ax1.text(0.5, 0.1, f"Zona(s)\n{", ".join(zone_selected)}", fontsize=18, color=text_colour, va='center', ha='center')
+    ax1.text(0.99, 0.7, "Mapa de Pases", fontsize=24, color='gold', va='center', ha='right', weight='bold')
+
+
 
     # Pitch (ax2)
     ax2 = fig.add_subplot(gs[1])
@@ -395,12 +427,17 @@ def pass_df_treatment(passes_df):
     ax3 = fig.add_subplot(gs[2])
     ax3.axis('off')
     ax3.set_facecolor('#22312b')
-    ax3.text(0.2, 0.9, f"Passes Attempted: {passes_attempted}", fontsize=16, color=text_colour, ha='left')
-    ax3.text(0.2, 0.6, f"Passes Completed: {passes_completed}", fontsize=16, color=text_colour, ha='left')
-    # ax3.text(0.2, 0.3, f"Accuracy: {passing_accuracy}%", fontsize=16, color=text_colour, ha='left')
+    ax3.text(0.01, 0.9, f"Passes Attempted: {passes_attempted}", fontsize=16, color=text_colour, ha='left')
+    ax3.text(0.01, 0.6, f"Passes Completed: {passes_completed}", fontsize=16, color=text_colour, ha='left')
+    ax3.text(0.01, 0.3, f"Accuracy: {passing_accuracy}%", fontsize=16, color=text_colour, ha='left')
 
-    ax3.text(0.7, 0.8, f"Forward Passes: {fwd_passes}", fontsize=16, color=text_colour, ha='center')
-    ax3.text(0.7, 0.4, f"Backward Passes: {back_passes}", fontsize=16, color=text_colour, ha='center')
+    ax3.text(0.5, 0.9, f"Forward Passes: {fwd_passes}", fontsize=16, color=text_colour, ha='center')
+    ax3.text(0.5, 0.6, f"Backward Passes: {back_passes}", fontsize=16, color=text_colour, ha='center')
+
+    ax3.text(0.99, 0.9, f"Pases cortos: {short_attempted} ({short_accuracy}%)", fontsize=16, color=text_colour, ha='right')
+    ax3.text(0.99, 0.6, f"Pases medios: {medium_attempted} ({medium_accuracy}%)", fontsize=16, color=text_colour, ha='right')
+    ax3.text(0.99, 0.3, f"Pases largos: {long_attempted} ({long_accuracy}%)", fontsize=16, color=text_colour, ha='right')
+    
 
     st.pyplot(fig)
 
@@ -410,14 +447,86 @@ player_selected = st.multiselect("Selcciona los jugadores", options=(df_events[d
 
 pass_df = passes_filter_df(df_events_filtered, team_selected, zone_selected, player_selected)
 st.dataframe(pass_df)
-pass_df_treatment(pass_df)
 
 
+if st.button("Show Passes Visualization"):
+    pass_df_treatment(pass_df)
+
+def crosses(df, team_selected):
+    df = df[df["team_name"] == team_selected]
+    cross_df = df[~df["Cross"].isna()].copy()
+
+    # Total crosses by side
+    total_right = cross_df[cross_df["y"] <= 30].shape[0]
+    total_left = cross_df[cross_df["y"] >= 70].shape[0]
+
+    # Filter completed crosses
+    cross_df_complete = cross_df[cross_df["outcome"] == 1]
+    cross_df_incomplete = cross_df[cross_df["outcome"] == 0]
+
+    # Accurate crosses by side
+    accurate_right = cross_df_complete[cross_df_complete["y"] <= 30].shape[0]
+    accurate_left = cross_df_complete[cross_df_complete["y"] >= 70].shape[0]
+
+
+        # Create the figure
+    fig = plt.figure(figsize=(14, 10))
+    gs = GridSpec(3, 1, height_ratios=[1.8, 12, 2.5], figure=fig)
+    fig.patch.set_facecolor(bg_colour)
+
+    # Header (ax1)
+    ax1 = fig.add_subplot(gs[0])
+    ax1.axis('off')
+    ax1.set_facecolor(bg_colour)
+    ax1.text(0.01, 0.7, f"{team_selected}", fontsize=24, color='gold', va='center', ha='left', weight='bold')
+    ax1.text(0.99, 0.7, "Centros", fontsize=24, color='gold', va='center', ha='right', weight='bold')
+
+
+    # Pitch (ax2)
+    ax2 = fig.add_subplot(gs[1])
+    pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color=bg_colour, line_color=text_colour)
+    pitch.draw(ax=ax2)
+
+    # Plot the completed passes
+    pitch.arrows(cross_df_complete["x"], cross_df_complete["y"],
+                cross_df_complete["Pass End X"], cross_df_complete["Pass End Y"], width=2,
+                headwidth=10, headlength=10, color=text_colour, ax=ax2, label='completed passes')
+
+    # Plot the other passes
+    pitch.arrows(cross_df_incomplete["x"], cross_df_incomplete["y"],
+                cross_df_incomplete["Pass End X"], cross_df_incomplete["Pass End Y"], width=2,
+                headwidth=6, headlength=5, headaxislength=12,
+                color='#ba4f45', ax=ax2, label='other passes')
+
+    
+    ax2.legend(facecolor=bg_colour, handlelength=5, edgecolor='None', fontsize=14, loc='lower left', labelcolor=text_colour)
+
+    # Stats (ax3)
+    ax3 = fig.add_subplot(gs[2])
+    ax3.axis('off')
+    ax3.set_facecolor('#22312b')
+    ax3.text(0.2, 0.9, f"Right: {total_right} ({round(accurate_right/total_right, 2) * 100}%)", fontsize=16, color=text_colour, ha='left')
+    ax3.text(0.2, 0.6, f"Left: {total_left} ({round(accurate_left/total_left, 2) * 100}%)", fontsize=16, color=text_colour, ha='left')
+
+    ax3.text(0.8, 0.9, f"Successful: {cross_df_complete.shape[0]}", fontsize=16, color=text_colour, ha='right')
+    ax3.text(0.8, 0.6, f"Unsuccessful: {cross_df_incomplete.shape[0]}", fontsize=16, color=text_colour, ha='right')
+    ax3.text(0.8, 0.3, f"Accuracy: {round(cross_df_complete.shape[0] / (cross_df_complete.shape[0] + cross_df_incomplete.shape[0]) * 100, 2)} %", fontsize=16, color=text_colour, ha='right')
+    
+
+
+    st.pyplot(fig)
+
+    # Set the title
+    # ax_title = ax.set_title(f'{team1} passes vs {team2}', fontsize=30)
+
+if st.button("Show Crosses Map"):
+    crosses(df_events_filtered, team_selected)
 
 
 def plot_defensive_stats(df, team_name, selected_events=None):
     df.columns = df.columns.str.strip()
     df_team = df[df["team_name"] == team_name]
+
     def_df = df_team[df_team["Defensive"] == 1].copy()
 
     all_event_types = list(def_df["event_type"].unique())
@@ -467,12 +576,15 @@ def plot_attacking_stats(df, team_name, selected_events=None):
     df_team = df[df["team_name"] == team_name]
 
     att_list = list(df_team.loc[(~df_team["Offensive"].isna()), "event_type"].unique())
-    att_list = [event for event in att_list if event not in ["Pass", "Deleted event"]]
+    att_list = [event for event in att_list if event not in ["Pass", "Deleted event", "Challenge"]]
+
+    att_df = df_team[df_team["Offensive"] == 1].copy()
+
 
     if selected_events:
         att_list = selected_events
 
-    att_df = df_team[df_team["event_type"].isin(att_list)].copy()
+    att_df = att_df[att_df["event_type"].isin(att_list)].copy()
     att_df = att_df.dropna(subset=["x", "y", "outcome", "event_type"])
 
     pitch = Pitch(pitch_type='opta', line_zorder=2)
@@ -522,14 +634,14 @@ vis_type = st.radio("Choose visualisation type:", ["Defensive", "Attacking"])
 
 
 if vis_type == "Defensive":
-    _, full_stats_df, all_def_events = plot_defensive_stats(df_events, team_selected)
+    _, full_stats_df, all_def_events = plot_defensive_stats(df_events_filtered, team_selected)
     selected_def_events = st.multiselect("Select defensive event types to show on pitch:", all_def_events, default=all_def_events)
-    fig, filtered_stats_df, _ = plot_defensive_stats(df_events, team_selected, selected_def_events)
+    fig, filtered_stats_df, _ = plot_defensive_stats(df_events_filtered, team_selected, selected_def_events)
 
 else:
-    _, full_stats_df, all_att_events = plot_attacking_stats(df_events, team_selected)
+    _, full_stats_df, all_att_events = plot_attacking_stats(df_events_filtered, team_selected)
     selected_att_events = st.multiselect("Select attacking event types to show on pitch:", all_att_events, default=all_att_events)
-    fig, filtered_stats_df, _ = plot_attacking_stats(df_events, team_selected, selected_att_events)
+    fig, filtered_stats_df, _ = plot_attacking_stats(df_events_filtered, team_selected, selected_att_events)
 
 # Add stats table to the visualization itself
 # Select top 5-8 rows to fit cleanly
@@ -545,8 +657,51 @@ st.subheader("Full Summary Table")
 st.dataframe(full_stats_df)
 
 
+def recoveries(df, team_selected, player):
+    # Filter for ball recoveries and drop missing x/y
+
+    rec_df = df[(df["event_type"] == "Ball recovery")].copy()
+
+    # 4. Apply filters
+    team_filter = rec_df['team_name'] == team_selected
+
+    # Show all players if none selected
+    if not player_selected:
+        player_filter = rec_df['player_name'].notna()
+    else:
+        player_filter = rec_df['player_name'].isin(player_selected)
+
+    # 5. Final filtered DF
+    rec_df = rec_df.loc[team_filter & player_filter].reset_index(drop=True)
 
 
+
+    rec_df = rec_df.dropna(subset=["x", "y"])
+
+    # Setup the pitch
+    pitch = Pitch(pitch_type='opta', pitch_color=bg_colour, line_color='#c7d5cc')
+    fig, ax = pitch.draw(figsize=(10, 7))
+    fig.set_facecolor(bg_colour)
+
+    # Plot the recoveries
+    pitch.scatter(
+        rec_df["x"], rec_df["y"],
+        ax=ax,
+        color='#00ff88',
+        edgecolors='black',
+        linewidth=0.5,
+        s=100,
+        label='Ball Recoveries'
+    )
+
+    # Add legend and title
+    ax.legend(facecolor=bg_colour, fontsize=14, loc='upper right', frameon=False)
+    ax.set_title("Ball Recoveries", fontsize=24, color=text_colour)
+
+    st.pyplot(fig)
+
+
+recoveries(df_events, team_selected, player_selected)
 
 
 
